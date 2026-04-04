@@ -49,6 +49,7 @@ function TrackRow({
   label, color, slot,
   url, ytId,
   muted, solo, armed,
+  recordTrigger,
   onMute, onSolo, onArm,
   onRecordEnd,
 }: {
@@ -56,6 +57,7 @@ function TrackRow({
   url: string | null;
   ytId?: string | null;
   muted: boolean; solo: boolean; armed: boolean;
+  recordTrigger: number;
   onMute: () => void; onSolo: () => void; onArm: () => void;
   onRecordEnd: (blob: Blob) => void;
 }) {
@@ -119,6 +121,14 @@ function TrackRow({
     wsRef.current.isPlaying() ? wsRef.current.pause() : wsRef.current.play();
   };
 
+  /* Trigger recording when parent fires recordTrigger while armed */
+  useEffect(() => {
+    if (armed && recordTrigger > 0 && trackState === "idle") {
+      startRecording();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordTrigger]);
+
   const isYt = !!ytId;
   const rowHeight = isYt ? 190 : 80;
 
@@ -155,7 +165,8 @@ function TrackRow({
 
       {/* Content */}
       <div className="flex-1 relative bg-gray-950 overflow-hidden">
-        {/* YouTube embedded in track */}
+
+        {/* YouTube en la pista — con progress bar propio */}
         {isYt && (
           <div className="absolute inset-0 flex items-center gap-3 px-3 py-2">
             <div className="relative rounded-lg overflow-hidden bg-black shrink-0"
@@ -167,13 +178,13 @@ function TrackRow({
                 allowFullScreen loading="lazy"
               />
             </div>
-            <p className="text-[10px] text-amber-400 leading-relaxed">
-              Reproduce el video y graba con auriculares para evitar interferencias
+            <p className="text-[10px] text-amber-400 leading-relaxed max-w-[100px]">
+              Usa auriculares — el video muestra tu posición en la canción
             </p>
           </div>
         )}
 
-        {/* WaveSurfer waveform */}
+        {/* Waveform (archivo de audio) — muestra progreso de reproducción */}
         {!isYt && <div ref={waveRef} className="absolute inset-0 px-1 py-2" />}
 
         {/* Empty state */}
@@ -181,18 +192,18 @@ function TrackRow({
           <div className="absolute inset-0 flex items-center px-4">
             <span className="text-xs text-gray-600">
               {slot
-                ? armed ? "▶ REC para empezar a grabar" : "Arma (●) y presiona ▶ REC"
+                ? armed ? "▶ REC para grabar" : "Arma (●) y presiona ▶ REC"
                 : "Sin audio de referencia"}
             </span>
           </div>
         )}
 
-        {/* Play button on hover */}
+        {/* Play / pause al tocar la pista */}
         {url && loaded && !isYt && trackState === "idle" && (
           <button onClick={togglePlay}
-            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 bg-black/70 rounded-full p-1.5 transition-opacity"
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-black/90 rounded-full p-2 transition-colors"
           >
-            <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
               <path d="M5 3l14 9-14 9V3z" />
             </svg>
           </button>
@@ -218,6 +229,7 @@ export default function Studio({
   const [solo, setSolo] = useState<string | null>(null);
   const [armedSlot, setArmedSlot] = useState<Slot | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordTrigger, setRecordTrigger] = useState(0);
   const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
   const [pendingSlot, setPendingSlot] = useState<Slot | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -257,6 +269,7 @@ export default function Studio({
 
   const handlePlayRec = () => {
     if (!armedSlot) { playAll(); return; }
+    // Play reference audio file simultaneously
     if (referenceUrl && referenceType !== "youtube") {
       const audio = new Audio(referenceUrl);
       audio.volume = 0.75;
@@ -264,6 +277,7 @@ export default function Studio({
       audio.play().catch(() => {});
     }
     setIsRecording(true);
+    setRecordTrigger(t => t + 1); // signals the armed TrackRow to start recording
   };
 
   const handleRecordEnd = useCallback((blob: Blob, slot: Slot) => {
@@ -392,6 +406,7 @@ export default function Studio({
             muted={!!muted[id]}
             solo={solo === id}
             armed={armedSlot === slot}
+            recordTrigger={recordTrigger}
             onMute={() => setMuted(m => ({ ...m, [id]: !m[id] }))}
             onSolo={() => setSolo(s => s === id ? null : id)}
             onArm={() => slot && setArmedSlot(a => a === slot ? null : slot)}
