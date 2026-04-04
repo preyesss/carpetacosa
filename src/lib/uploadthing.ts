@@ -2,11 +2,20 @@ import { UTApi } from "uploadthing/server";
 
 export const utapi = new UTApi();
 
+/** MIME types que algunos sistemas reportan distinto — normaliza al estándar */
+function normalizeMime(type: string, filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  if (ext === "m4a" || type === "audio/x-m4a" || type === "audio/m4a") return "audio/mp4";
+  if (ext === "m4v") return "video/mp4";
+  return type || "application/octet-stream";
+}
+
 export async function uploadFileToUT(
   file: File,
   filename: string
 ): Promise<string> {
-  const renamedFile = new File([file], filename, { type: file.type });
+  const mimeType = normalizeMime(file.type, filename);
+  const renamedFile = new File([file], filename, { type: mimeType });
   const result = await utapi.uploadFiles(renamedFile);
 
   if (result.error) {
@@ -16,7 +25,6 @@ export async function uploadFileToUT(
     throw new Error("UploadThing: no se recibió respuesta");
   }
 
-  // ufsUrl is the new field; url is deprecated but present in v7
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const url = (result.data as any).ufsUrl ?? result.data.url;
   if (!url) {
