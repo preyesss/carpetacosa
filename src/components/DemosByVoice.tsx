@@ -1,3 +1,5 @@
+import DemoRecorder from "./DemoRecorder";
+
 const VOICES = [
   { key: "soprano",    label: "Soprano",    color: "text-pink-600 bg-pink-50 border-pink-200" },
   { key: "contraalto", label: "Contraalto", color: "text-purple-600 bg-purple-50 border-purple-200" },
@@ -6,6 +8,7 @@ const VOICES = [
 ] as const;
 
 interface Props {
+  hymnId: number;
   audioSopranoUrl: string | null;
   audioContraaltoUrl: string | null;
   audioTenorUrl: string | null;
@@ -13,6 +16,7 @@ interface Props {
 }
 
 export default function DemosByVoice({
+  hymnId,
   audioSopranoUrl,
   audioContraaltoUrl,
   audioTenorUrl,
@@ -47,6 +51,7 @@ export default function DemosByVoice({
                 </a>
               )}
             </div>
+
             {urls[key] ? (
               <audio controls className="w-full h-8" src={urls[key]!}>
                 Tu navegador no soporta el elemento de audio.
@@ -56,6 +61,8 @@ export default function DemosByVoice({
                 <span className="text-xs opacity-60">Sin demo</span>
               </div>
             )}
+
+            <DemoRecorder hymnId={hymnId} slot={key} />
           </div>
         ))}
       </div>

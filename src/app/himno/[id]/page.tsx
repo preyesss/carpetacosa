@@ -94,6 +94,7 @@ export default async function HimnoPage({ params }: { params: { id: string } }) 
 
         {/* Demos por cuerda */}
         <DemosByVoice
+          hymnId={hymn.id}
           audioSopranoUrl={hymn.audioSopranoUrl}
           audioContraaltoUrl={hymn.audioContraaltoUrl}
           audioTenorUrl={hymn.audioTenorUrl}
