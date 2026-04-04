@@ -84,14 +84,14 @@ export default function FileUploadSection({
       {/* YouTube URL input for audioGeneral */}
       <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
         <label className="block text-xs font-medium text-gray-600 mb-1.5">
-          URL de YouTube (audio/video de referencia)
+          URL de referencia (YouTube, SoundCloud, MP3 directo, etc.)
         </label>
         <div className="flex gap-2">
           <input
             type="url"
             value={ytUrl}
             onChange={(e) => setYtUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
+            placeholder="https://youtube.com/watch?v=... o https://ejemplo.com/himno.mp3"
             className="flex-1 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
@@ -102,6 +102,38 @@ export default function FileUploadSection({
             {savingYt ? "..." : "Guardar"}
           </button>
         </div>
+      </div>
+
+      {/* Audio general: file upload */}
+      <div className="mb-3">
+        <input
+          ref={(el) => { refs.current["audioGeneral"] = el; }}
+          type="file"
+          accept="audio/*,video/mp4"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleFileUpload("audioGeneral", f);
+            e.target.value = "";
+          }}
+        />
+        <button
+          onClick={() => refs.current["audioGeneral"]?.click()}
+          disabled={uploading === "audioGeneral"}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-blue-300 text-sm text-gray-600 font-medium transition-all disabled:opacity-60"
+        >
+          {uploading === "audioGeneral" ? (
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+          )}
+          O subir archivo de audio general (MP3, WAV, etc.)
+        </button>
       </div>
 
       {/* File upload buttons */}
