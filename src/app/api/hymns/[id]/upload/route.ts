@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
-import fs from "fs/promises";
 import { updateHymnMedia } from "@/lib/hymns";
 
 type Slot =
@@ -50,27 +49,30 @@ export async function POST(
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     }
 
-    // Determine extension
-    const originalName = file.name;
-    const ext = path.extname(originalName) || ".bin";
+    const ext = path.extname(file.name) || ".bin";
+    const filename = `hymn-${id}-${SLOT_FILENAME[slot]}${ext}`;
 
-    // Save to public/uploads/[id]/
-    const uploadDir = path.join(process.cwd(), "public", "uploads", String(id));
-    await fs.mkdir(uploadDir, { recursive: true });
+    let url: string;
 
-    const filename = `${SLOT_FILENAME[slot]}${ext}`;
-    const filepath = path.join(uploadDir, filename);
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(filepath, buffer);
-
-    // Build URL (relative to public/)
-    const url = `/uploads/${id}/${filename}`;
+    if (process.env.UPLOADTHING_TOKEN) {
+      // Production: upload to UploadThing
+      const { uploadFileToUT } = await import("@/lib/uploadthing");
+      url = await uploadFileToUT(file, filename);
+    } else {
+      // Local dev: save to public/uploads/
+      const { default: fs } = await import("fs/promises");
+      const uploadDir = path.join(process.cwd(), "public", "uploads", String(id));
+      await fs.mkdir(uploadDir, { recursive: true });
+      const filepath = path.join(uploadDir, filename);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filepath, buffer);
+      url = `/uploads/${id}/${filename}`;
+    }
 
     // Update DB
     const fieldData: Record<string, string | null> = {
       [SLOT_TO_FIELD[slot]]: url,
     };
-    // If it's audioGeneral file upload, set type to "file"
     if (slot === "audioGeneral") {
       fieldData["audioGeneralType"] = "file";
     }
@@ -82,4 +84,3 @@ export async function POST(
     return NextResponse.json({ error: "Error al subir el archivo" }, { status: 500 });
   }
 }
-
