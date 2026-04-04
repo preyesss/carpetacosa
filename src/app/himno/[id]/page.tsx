@@ -77,64 +77,48 @@ export default async function HimnoPage({ params }: { params: { id: string } }) 
         )}
       </header>
 
-      {/* Main content: split layout */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:gap-6 p-4 gap-6">
-        {/* Left: Partitura */}
-        <div className="flex-1 min-w-0">
-          <PartituraViewer url={hymn.partituraPdfUrl} />
-        </div>
-
-        {/* Right: Audio + metadata */}
-        <div className="w-full lg:w-80 xl:w-96 shrink-0 space-y-4 lg:sticky lg:top-[73px]">
-          <AudioPlayer
-            url={hymn.audioGeneralUrl}
-            type={hymn.audioGeneralType}
-            label="Audio General"
-            hymnTitle={hymn.title}
-          />
-
-          {/* Metadata */}
-          <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-            <MetaRow label="Tipo" value={hymn.hymnType} />
-            <MetaRow label="Versión" value={hymn.version} />
-            <MetaRow
-              label="N° Himnario"
-              value={hymn.hymnaryNumber ?? undefined}
-            />
-            <MetaRow
-              label="Demo disponible"
-              value={hymn.hasDemo ? "Sí" : undefined}
-            />
-            <MetaRow label="Solista" value={hymn.soloistNote} />
-            <MetaRow
-              label="Conf. 2021"
-              value={hymn.inConference2021 ? "Sí" : undefined}
-            />
-            <MetaRow
-              label="Fuente"
-              value={
-                hymn.source === "BOTH"
-                  ? "2025 + 2020"
-                  : hymn.source === "2025"
-                  ? "Repertorio 2025"
-                  : "Listado 2020"
-              }
-            />
-          </div>
-        </div>
+      {/* Partitura — protagonista */}
+      <div className="px-4 pt-4">
+        <PartituraViewer url={hymn.partituraPdfUrl} />
       </div>
 
-      {/* Demos + Uploads */}
-      <div className="px-4 pb-8 space-y-6">
-        {(hasAnyDemo || true) && (
-          <DemosByVoice
-            audioSopranoUrl={hymn.audioSopranoUrl}
-            audioContraaltoUrl={hymn.audioContraaltoUrl}
-            audioTenorUrl={hymn.audioTenorUrl}
-            audioBajoUrl={hymn.audioBajoUrl}
-          />
-        )}
+      {/* Resto del contenido */}
+      <div className="px-4 pb-8 mt-6 space-y-6">
+        {/* Audio general */}
+        <AudioPlayer
+          url={hymn.audioGeneralUrl}
+          type={hymn.audioGeneralType}
+          label="Audio General"
+          hymnTitle={hymn.title}
+        />
 
+        {/* Demos por cuerda */}
+        <DemosByVoice
+          audioSopranoUrl={hymn.audioSopranoUrl}
+          audioContraaltoUrl={hymn.audioContraaltoUrl}
+          audioTenorUrl={hymn.audioTenorUrl}
+          audioBajoUrl={hymn.audioBajoUrl}
+        />
+
+        {/* Metadata compacta */}
+        <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+          <MetaRow label="Tipo" value={hymn.hymnType} />
+          <MetaRow label="Versión" value={hymn.version} />
+          <MetaRow label="N° Himnario" value={hymn.hymnaryNumber ?? undefined} />
+          <MetaRow label="Demo disponible" value={hymn.hasDemo ? "Sí" : undefined} />
+          <MetaRow label="Solista" value={hymn.soloistNote} />
+          <MetaRow label="Conf. 2021" value={hymn.inConference2021 ? "Sí" : undefined} />
+          <MetaRow
+            label="Fuente"
+            value={
+              hymn.source === "BOTH" ? "2025 + 2020"
+              : hymn.source === "2025" ? "Repertorio 2025"
+              : "Listado 2020"
+            }
+          />
+        </div>
+
+        {/* Subir archivos */}
         <div className="border-t border-gray-100 pt-6">
           <FileUploadSection
             hymnId={hymn.id}
