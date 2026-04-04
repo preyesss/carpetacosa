@@ -1,29 +1,35 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { useCallback, useEffect, useRef, useTransition } from "react";
 
 export default function SearchBar({ defaultValue = "" }: { defaultValue?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      if (value) {
-        params.set("q", value);
-      } else {
-        params.delete("q");
-      }
-      startTransition(() => {
-        router.replace(`${pathname}?${params.toString()}`);
-      });
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        const params = new URLSearchParams(searchParams?.toString() ?? "");
+        if (value) {
+          params.set("q", value);
+        } else {
+          params.delete("q");
+        }
+        startTransition(() => {
+          router.replace(`${pathname}?${params.toString()}`);
+        });
+      }, 350);
     },
     [router, pathname, searchParams]
   );
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   return (
     <div className="relative">
