@@ -1,34 +1,57 @@
 "use client";
 
 function extractYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
+  const m = url.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
+  );
+  return m ? m[1] : null;
 }
 
 export default function AudioPlayer({
   url,
   type,
   label = "Audio General",
+  hymnTitle,
 }: {
   url: string | null;
   type: string | null;
   label?: string;
+  hymnTitle?: string;
 }) {
   if (!url) {
+    const q = hymnTitle ? encodeURIComponent(hymnTitle + " himno") : "";
     return (
-      <div className="flex items-center justify-center h-24 bg-gray-100 rounded-xl border-2 border-dashed border-gray-200">
-        <div className="text-center text-gray-400">
-          <svg className="mx-auto w-6 h-6 mb-1 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0a3 3 0 100-6 3 3 0 000 6z" />
-          </svg>
-          <p className="text-xs">Sin audio</p>
-        </div>
+      <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+          {label}
+        </p>
+        <p className="text-sm text-gray-400 mb-3">Sin audio todavía.</p>
+        {hymnTitle && (
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`https://www.youtube.com/results?search_query=${q}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.75 15.5v-7l6.25 3.5-6.25 3.5z"/>
+              </svg>
+              Buscar en YouTube
+            </a>
+            <a
+              href={`https://open.spotify.com/search/${q}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+              </svg>
+              Buscar en Spotify
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -42,7 +65,10 @@ export default function AudioPlayer({
         {label}
       </span>
       {isYouTube && ytId ? (
-        <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+        <div
+          className="relative w-full rounded-xl overflow-hidden bg-black"
+          style={{ aspectRatio: "16/9" }}
+        >
           <iframe
             src={`https://www.youtube.com/embed/${ytId}`}
             title={label}

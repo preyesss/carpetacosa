@@ -90,6 +90,7 @@ export default async function HimnoPage({ params }: { params: { id: string } }) 
             url={hymn.audioGeneralUrl}
             type={hymn.audioGeneralType}
             label="Audio General"
+            hymnTitle={hymn.title}
           />
 
           {/* Metadata */}
