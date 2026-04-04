@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/plugins/regions";
+import RecordPlugin from "wavesurfer.js/plugins/record";
 
-/* ── WAV encoder ──────────────────────────────────────────────── */
+/* ── WAV encoder ─────────────────────────────────────────────────── */
 function encodeWav(buffer: AudioBuffer): Blob {
   const numCh = buffer.numberOfChannels;
   const sr = buffer.sampleRate;
   const dataLen = buffer.length * numCh * 2;
   const ab = new ArrayBuffer(44 + dataLen);
   const v = new DataView(ab);
-  const str = (o: number, s: string) =>
-    [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
   str(0, "RIFF"); v.setUint32(4, 36 + dataLen, true);
   str(8, "WAVE"); str(12, "fmt ");
   v.setUint32(16, 16, true); v.setUint16(20, 1, true);
@@ -24,216 +24,306 @@ function encodeWav(buffer: AudioBuffer): Blob {
   for (let i = 0; i < buffer.length; i++)
     for (let ch = 0; ch < numCh; ch++) {
       const s = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
-      v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      off += 2;
+      v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true); off += 2;
     }
   return new Blob([ab], { type: "audio/wav" });
 }
 
-function fmt(s: number) {
-  return `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, "0")}`;
+function fmtTime(s: number) {
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s) % 60).padStart(2, "0")}`;
 }
 
-/* ── Types ──────────────────────────────────────────────────────── */
+/* ── Types ────────────────────────────────────────────────────────── */
 type Slot = "soprano" | "contraalto" | "tenor" | "bajo";
-type RecPhase = "idle" | "recording" | "reviewing" | "uploading";
 
-const VOICES: { slot: Slot; label: string; color: string; bg: string }[] = [
-  { slot: "soprano",    label: "Soprano",    color: "#db2777", bg: "#fdf2f8" },
-  { slot: "contraalto", label: "Contraalto", color: "#7c3aed", bg: "#f5f3ff" },
-  { slot: "tenor",      label: "Tenor",      color: "#2563eb", bg: "#eff6ff" },
-  { slot: "bajo",       label: "Bajo",       color: "#374151", bg: "#f9fafb" },
+const TRACKS: { id: string; label: string; color: string; slot?: Slot }[] = [
+  { id: "referencia", label: "Referencia", color: "#10b981" },
+  { id: "soprano",    label: "Soprano",    color: "#db2777", slot: "soprano" },
+  { id: "contraalto", label: "Contraalto", color: "#7c3aed", slot: "contraalto" },
+  { id: "tenor",      label: "Tenor",      color: "#2563eb", slot: "tenor" },
+  { id: "bajo",       label: "Bajo",       color: "#78716c", slot: "bajo" },
 ];
 
-/* ── VU Meter ───────────────────────────────────────────────────── */
-function VuMeter({ levels }: { levels: number[] }) {
+type TrackState = "idle" | "armed" | "recording" | "reviewing";
+
+/* ── Waveform Track Row ───────────────────────────────────────────── */
+function TrackRow({
+  id, label, color, slot,
+  url, muted, solo, armed,
+  isAnyRecording,
+  onMute, onSolo, onArm,
+  onRecordEnd,
+  hymnId,
+}: {
+  id: string; label: string; color: string; slot?: Slot;
+  url: string | null;
+  muted: boolean; solo: boolean; armed: boolean;
+  isAnyRecording: boolean;
+  onMute: () => void; onSolo: () => void; onArm: () => void;
+  onRecordEnd: (blob: Blob) => void;
+  hymnId: number;
+}) {
+  const waveRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WaveSurfer | null>(null);
+  const recordRef = useRef<RecordPlugin | null>(null);
+  const [trackState, setTrackState] = useState<TrackState>("idle");
+  const [recSeconds, setRecSeconds] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  /* Init WaveSurfer when url available and not recording */
+  useEffect(() => {
+    if (!waveRef.current || !url || trackState === "recording") return;
+    wsRef.current?.destroy();
+
+    const ws = WaveSurfer.create({
+      container: waveRef.current,
+      waveColor: color + "99",
+      progressColor: color,
+      height: 56,
+      barWidth: 2, barGap: 1, barRadius: 3,
+      interact: true,
+    });
+    if (muted) ws.setMuted(true);
+    ws.load(url).then(() => setLoaded(true));
+    wsRef.current = ws;
+    return () => ws.destroy();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, trackState]);
+
+  /* Sync mute */
+  useEffect(() => {
+    wsRef.current?.setMuted(muted);
+  }, [muted]);
+
+  /* Init recording WaveSurfer */
+  const startRecording = useCallback(async () => {
+    if (!waveRef.current) return;
+    wsRef.current?.destroy();
+
+    const rec = RecordPlugin.create({
+      mimeType: MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "audio/webm",
+      scrollingWaveform: true,
+      renderRecordedAudio: false,
+    });
+
+    const ws = WaveSurfer.create({
+      container: waveRef.current,
+      waveColor: color + "cc",
+      progressColor: color,
+      height: 56,
+      barWidth: 2, barGap: 1, barRadius: 3,
+      plugins: [rec],
+    });
+
+    wsRef.current = ws;
+    recordRef.current = rec;
+
+    let secs = 0;
+    rec.on("record-progress", (t) => {
+      secs = t / 1000;
+      setRecSeconds(secs);
+    });
+
+    rec.on("record-end", (blob) => {
+      setTrackState("idle");
+      onRecordEnd(blob);
+    });
+
+    await rec.startRecording({ channelCount: 2, sampleRate: 44100, echoCancellation: false, noiseSuppression: false } as MediaTrackConstraints);
+    setTrackState("recording");
+    setRecSeconds(0);
+  }, [color, onRecordEnd]);
+
+  const stopRecording = () => {
+    recordRef.current?.stopRecording();
+  };
+
+  /* Play / pause this track individually */
+  const togglePlay = () => {
+    if (!wsRef.current || !loaded) return;
+    if (wsRef.current.isPlaying()) wsRef.current.pause();
+    else wsRef.current.play();
+  };
+
+  // Expose ws for parent sync
+  useEffect(() => {
+    (waveRef.current as HTMLElement & { __ws?: WaveSurfer }).__ws = wsRef.current ?? undefined;
+  });
+
   return (
-    <div className="flex items-end gap-1">
-      {levels.map((lvl, i) => (
-        <div key={i} className="flex flex-col-reverse gap-px items-center">
-          <span className="text-[9px] text-gray-400 mb-0.5">{i === 0 ? "L" : "R"}</span>
-          {Array.from({ length: 10 }).map((_, bar) => (
-            <div
-              key={bar}
-              className="w-2.5 h-1.5 rounded-sm transition-colors duration-75"
-              style={{
-                backgroundColor:
-                  bar / 10 < lvl
-                    ? bar > 7 ? "#ef4444" : bar > 5 ? "#f59e0b" : "#22c55e"
-                    : "#e5e7eb",
-              }}
-            />
-          ))}
+    <div className="flex border-b border-gray-800 last:border-0" style={{ minHeight: 80 }}>
+      {/* Left panel */}
+      <div className="w-36 shrink-0 flex flex-col justify-center gap-1.5 px-3 py-2 bg-gray-900 border-r border-gray-700">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+          <span className="text-xs font-semibold text-gray-200 truncate">{label}</span>
         </div>
-      ))}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onMute}
+            title="Mute"
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${
+              muted ? "bg-yellow-500 text-black" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+          >M</button>
+          <button
+            onClick={onSolo}
+            title="Solo"
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${
+              solo ? "bg-green-500 text-black" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+          >S</button>
+          {slot && (
+            <button
+              onClick={trackState === "recording" ? stopRecording : onArm}
+              title={trackState === "recording" ? "Detener" : "Armar grabación"}
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${
+                trackState === "recording"
+                  ? "bg-red-600 text-white animate-pulse"
+                  : armed
+                  ? "bg-red-500 text-white"
+                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              }`}
+            >
+              {trackState === "recording" ? "■" : "●"}
+            </button>
+          )}
+        </div>
+        {trackState === "recording" && (
+          <span className="text-[10px] font-mono text-red-400">{fmtTime(recSeconds)}</span>
+        )}
+      </div>
+
+      {/* Waveform area */}
+      <div className="flex-1 relative bg-gray-950 overflow-hidden">
+        <div ref={waveRef} className="absolute inset-0 px-1 py-2" />
+        {!url && trackState === "idle" && (
+          <div className="absolute inset-0 flex items-center px-4">
+            <span className="text-xs text-gray-600">
+              {slot ? (armed ? "Listo para grabar — presiona ▶ para iniciar" : "Sin demo — arma (●) y presiona ▶") : "Sin audio de referencia"}
+            </span>
+          </div>
+        )}
+        {/* Click to play individual track */}
+        {url && loaded && trackState === "idle" && (
+          <button
+            onClick={togglePlay}
+            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity bg-black/60 rounded-full p-1.5"
+          >
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M5 3l14 9-14 9V3z" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ── Voice Track ────────────────────────────────────────────────── */
-function VoiceTrack({
-  hymnId,
-  slot,
-  label,
-  color,
-  bg,
-  existingUrl,
-  referenceUrl,
-  referenceType,
-  onRecordStart,
-  onRecordEnd,
-  isBlocked,
+/* ── Main Studio ─────────────────────────────────────────────────── */
+export default function Studio({
+  hymnId, hymnTitle,
+  referenceUrl, referenceType,
+  audioSopranoUrl, audioContraaltoUrl, audioTenorUrl, audioBajoUrl,
 }: {
-  hymnId: number;
-  slot: Slot;
-  label: string;
-  color: string;
-  bg: string;
-  existingUrl: string | null;
-  referenceUrl: string | null;
-  referenceType: string | null;
-  onRecordStart: () => void;
-  onRecordEnd: () => void;
-  isBlocked: boolean;
+  hymnId: number; hymnTitle: string;
+  referenceUrl: string | null; referenceType: string | null;
+  audioSopranoUrl: string | null; audioContraaltoUrl: string | null;
+  audioTenorUrl: string | null; audioBajoUrl: string | null;
 }) {
-  const [phase, setPhase] = useState<RecPhase>("idle");
-  const [secs, setSecs] = useState(0);
-  const [levels, setLevels] = useState([0, 0]);
-  const [playing, setPlaying] = useState(false);
+  const router = useRouter();
+  const [muted, setMuted] = useState<Record<string, boolean>>({});
+  const [solo, setSolo] = useState<string | null>(null);
+  const [armedSlot, setArmedSlot] = useState<Slot | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
+  const [pendingSlot, setPendingSlot] = useState<Slot | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [trimInfo, setTrimInfo] = useState<{ start: number; end: number } | null>(null);
 
-  const router = useRouter();
-  const waveRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WaveSurfer | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const regionRef = useRef<any>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const animRef = useRef<number | null>(null);
-  const rawBlobRef = useRef<Blob | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
+  const reviewWaveRef = useRef<HTMLDivElement>(null);
+  const reviewWsRef = useRef<WaveSurfer | null>(null);
+  const reviewUrlRef = useRef<string | null>(null);
   const refAudioRef = useRef<HTMLAudioElement | null>(null);
+  const trackWsRefs = useRef<Record<string, HTMLElement>>({});
 
-  useEffect(() => () => {
-    wsRef.current?.destroy();
-    if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-    if (animRef.current) cancelAnimationFrame(animRef.current);
-    if (timerRef.current) clearInterval(timerRef.current);
+  // Track URL map
+  const trackUrls: Record<string, string | null> = {
+    referencia: referenceType !== "youtube" ? referenceUrl : null,
+    soprano: audioSopranoUrl,
+    contraalto: audioContraaltoUrl,
+    tenor: audioTenorUrl,
+    bajo: audioBajoUrl,
+  };
+
+  /* ── Play all WaveSurfers in sync ── */
+  const playAll = () => {
+    Object.values(trackWsRefs.current).forEach((el) => {
+      const ws = (el as HTMLElement & { __ws?: WaveSurfer }).__ws;
+      if (ws && !ws.isPlaying()) ws.play();
+    });
+  };
+  const stopAll = () => {
+    Object.values(trackWsRefs.current).forEach((el) => {
+      const ws = (el as HTMLElement & { __ws?: WaveSurfer }).__ws;
+      ws?.stop();
+    });
+  };
+
+  /* ── Arm + start recording ── */
+  const handlePlayWithRecord = () => {
+    if (!armedSlot) { playAll(); return; }
+    // Start reference audio if file
+    if (referenceUrl && referenceType !== "youtube") {
+      const audio = new Audio(referenceUrl);
+      audio.volume = 0.75;
+      refAudioRef.current = audio;
+      audio.play().catch(() => {});
+    }
+    setIsRecording(true);
+  };
+
+  const handleRecordEnd = useCallback((blob: Blob, slot: Slot) => {
     refAudioRef.current?.pause();
+    setIsRecording(false);
+    setPendingBlob(blob);
+    setPendingSlot(slot);
+    if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
+    reviewUrlRef.current = URL.createObjectURL(blob);
   }, []);
 
-  /* Init WaveSurfer on review */
+  /* ── Init review waveform ── */
   useEffect(() => {
-    if (phase !== "reviewing" || !waveRef.current || !blobUrlRef.current) return;
-    wsRef.current?.destroy();
+    if (!pendingBlob || !reviewWaveRef.current || !reviewUrlRef.current) return;
+    reviewWsRef.current?.destroy();
+    const color = TRACKS.find(t => t.slot === pendingSlot)?.color ?? "#2563eb";
     const regions = RegionsPlugin.create();
     const ws = WaveSurfer.create({
-      container: waveRef.current,
+      container: reviewWaveRef.current,
       waveColor: color + "88",
       progressColor: color,
-      height: 56,
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 3,
+      height: 72, barWidth: 2, barGap: 1, barRadius: 3,
       plugins: [regions],
     });
-    ws.on("play", () => setPlaying(true));
-    ws.on("pause", () => setPlaying(false));
-    ws.on("finish", () => setPlaying(false));
-    ws.load(blobUrlRef.current).then(() => {
+    ws.load(reviewUrlRef.current).then(() => {
       const dur = ws.getDuration();
-      const reg = regions.addRegion({
-        start: 0, end: dur,
-        color: color + "22",
-        drag: true, resize: true,
-      });
-      regionRef.current = reg;
+      const reg = regions.addRegion({ start: 0, end: dur, color: color + "22", drag: true, resize: true });
       setTrimInfo({ start: 0, end: dur });
-      reg.on("update-end", () =>
-        setTrimInfo({ start: reg.start, end: reg.end })
-      );
+      reg.on("update-end", () => setTrimInfo({ start: reg.start, end: reg.end }));
     });
-    wsRef.current = ws;
+    reviewWsRef.current = ws;
     return () => ws.destroy();
-  }, [phase, color]);
+  }, [pendingBlob, pendingSlot]);
 
-  const startRecording = async () => {
+  /* ── Upload ── */
+  const upload = async () => {
+    if (!pendingBlob || !pendingSlot) return;
+    setIsUploading(true);
     try {
-      onRecordStart();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 2, sampleRate: 44100, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      });
-
-      /* Play reference audio */
-      if (referenceUrl && referenceType !== "youtube") {
-        const audio = new Audio(referenceUrl);
-        audio.volume = 0.8;
-        refAudioRef.current = audio;
-        audio.play().catch(() => {});
-      }
-
-      /* VU meters */
-      const audioCtx = new AudioContext();
-      const src = audioCtx.createMediaStreamSource(stream);
-      const splitter = audioCtx.createChannelSplitter(2);
-      const analysers = [0, 1].map(() => {
-        const a = audioCtx.createAnalyser(); a.fftSize = 256; return a;
-      });
-      src.connect(splitter);
-      analysers.forEach((a, i) => splitter.connect(a, i));
-      const buf = new Uint8Array(analysers[0].frequencyBinCount);
-      const tick = () => {
-        const lvls = analysers.map((a) => {
-          a.getByteFrequencyData(buf);
-          return Math.min(1, Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length) / 64);
-        });
-        setLevels(lvls);
-        animRef.current = requestAnimationFrame(tick);
-      };
-      animRef.current = requestAnimationFrame(tick);
-
-      const mimeType = MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4"
-        : MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType });
-      chunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        refAudioRef.current?.pause();
-        if (animRef.current) cancelAnimationFrame(animRef.current);
-        setLevels([0, 0]);
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        rawBlobRef.current = blob;
-        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = URL.createObjectURL(blob);
-        setPhase("reviewing");
-        onRecordEnd();
-      };
-      recorder.start();
-      recorderRef.current = recorder;
-      setPhase("recording");
-      setSecs(0);
-      timerRef.current = setInterval(() => setSecs((s) => s + 1), 1000);
-    } catch {
-      onRecordEnd();
-      alert("No se pudo acceder al micrófono.");
-    }
-  };
-
-  const stopRecording = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    recorderRef.current?.stop();
-  };
-
-  const applyTrimAndUpload = async () => {
-    if (!rawBlobRef.current) return;
-    setPhase("uploading");
-    try {
-      let finalBlob: Blob = rawBlobRef.current;
+      let finalBlob = pendingBlob;
       if (trimInfo) {
-        const decoded = await new AudioContext().decodeAudioData(await rawBlobRef.current.arrayBuffer());
+        const decoded = await new AudioContext().decodeAudioData(await pendingBlob.arrayBuffer());
         const sr = decoded.sampleRate;
         const s0 = Math.floor(trimInfo.start * sr);
         const s1 = Math.floor(trimInfo.end * sr);
@@ -242,272 +332,150 @@ function VoiceTrack({
           trimmed.copyToChannel(decoded.getChannelData(ch).subarray(s0, s1), ch);
         finalBlob = encodeWav(trimmed);
       }
-      const file = new File([finalBlob], `${slot}-${Date.now()}.wav`, { type: "audio/wav" });
+      const file = new File([finalBlob], `${pendingSlot}-${Date.now()}.wav`, { type: "audio/wav" });
       const form = new FormData();
-      form.append("slot", slot);
+      form.append("slot", pendingSlot);
       form.append("file", file);
       const res = await fetch(`/api/hymns/${hymnId}/upload`, { method: "POST", body: form });
-      if (res.ok) { setPhase("idle"); router.refresh(); }
-      else { alert((await res.json().catch(() => ({}))).error ?? "Error al subir"); setPhase("reviewing"); }
-    } catch { alert("Error procesando el audio"); setPhase("reviewing"); }
+      if (res.ok) {
+        setPendingBlob(null); setPendingSlot(null);
+        setArmedSlot(null);
+        router.refresh();
+      } else {
+        alert("Error al subir");
+      }
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const discard = () => {
-    wsRef.current?.destroy();
-    if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-    blobUrlRef.current = null; rawBlobRef.current = null;
-    setPhase("idle");
+  const discardReview = () => {
+    setPendingBlob(null); setPendingSlot(null);
+    setTrimInfo(null);
   };
 
-  const hasRef = referenceUrl && referenceType !== "youtube";
+  const ytId = referenceUrl && referenceType === "youtube"
+    ? referenceUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1]
+    : null;
 
   return (
-    <div className="rounded-2xl border-2 p-4 space-y-3" style={{ borderColor: color + "44", backgroundColor: bg }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <span className="font-bold text-sm" style={{ color }}>{label}</span>
-        {existingUrl && phase === "idle" && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Demo subido</span>
+    <div className="flex flex-col h-[calc(100vh-61px)]">
+      {/* ── Transport bar ── */}
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 border-b border-gray-700">
+        <button
+          onClick={handlePlayWithRecord}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium transition-colors"
+        >
+          {armedSlot ? (
+            <><span className="w-2 h-2 rounded-full bg-red-500" />Grabar + Referencia</>
+          ) : (
+            <><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>Play All</>
+          )}
+        </button>
+        <button
+          onClick={stopAll}
+          className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+          </svg>
+        </button>
+        <div className="h-4 w-px bg-gray-600 mx-1" />
+        {armedSlot ? (
+          <span className="text-xs text-red-400 font-medium flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+            {TRACKS.find(t => t.slot === armedSlot)?.label} armada — presiona ▶ para grabar
+          </span>
+        ) : (
+          <span className="text-xs text-gray-500">Arma una pista (●) para grabar con referencia</span>
+        )}
+        {ytId && (
+          <div className="ml-auto text-xs text-amber-400 flex items-center gap-1">
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+            Usa auriculares con YouTube
+          </div>
         )}
       </div>
 
-      {/* Existing demo */}
-      {existingUrl && phase === "idle" && (
-        <audio controls className="w-full h-8" src={existingUrl} />
-      )}
-
-      {/* ── idle ── */}
-      {phase === "idle" && (
-        <div className="space-y-1">
-          <button
-            onClick={startRecording}
-            disabled={isBlocked}
-            className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl text-white transition-all disabled:opacity-40"
-            style={{ backgroundColor: color }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 3a4 4 0 014 4v4a4 4 0 01-8 0V7a4 4 0 014-4z" />
-            </svg>
-            {existingUrl ? "Re-grabar" : "Grabar"}
-          </button>
-          {hasRef && (
-            <p className="text-[10px] text-gray-400">El audio de referencia sonará automáticamente</p>
-          )}
-          {referenceType === "youtube" && (
-            <p className="text-[10px] text-amber-600">
-              YouTube: reproduce el video manualmente y presiona Grabar con auriculares
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ── recording ── */}
-      {phase === "recording" && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-4">
-            <VuMeter levels={levels} />
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-lg font-mono font-bold text-red-600">{fmt(secs)}</span>
-              </div>
-              {hasRef && <span className="text-xs text-gray-500">🎵 Referencia sonando…</span>}
-            </div>
+      {/* ── Reference YouTube (if applicable) ── */}
+      {ytId && (
+        <div className="px-4 py-2 bg-gray-900 border-b border-gray-700">
+          <div className="relative rounded-lg overflow-hidden bg-black" style={{ width: "40%", aspectRatio: "16/9" }}>
+            <iframe
+              src={`https://www.youtube.com/embed/${ytId}?rel=0`}
+              className="absolute inset-0 w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen loading="lazy"
+            />
           </div>
-          <button
-            onClick={stopRecording}
-            className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="4" y="4" width="16" height="16" rx="2" />
-            </svg>
-            Detener
-          </button>
         </div>
       )}
 
-      {/* ── reviewing ── */}
-      {phase === "reviewing" && (
-        <div className="space-y-2">
-          <div ref={waveRef} className="w-full rounded-xl overflow-hidden bg-gray-900 px-1 py-1" />
-          {trimInfo && (
-            <p className="text-[10px] text-gray-400">
-              {fmt(trimInfo.start)} → {fmt(trimInfo.end)}
-              {" · "}{(trimInfo.end - trimInfo.start).toFixed(1)}s
-              <span className="ml-1 opacity-50">· Arrastra los bordes para recortar</span>
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
+      {/* ── Tracks ── */}
+      <div className="flex-1 overflow-y-auto bg-gray-950">
+        {TRACKS.map(({ id, label, color, slot }) => (
+          <TrackRow
+            key={id}
+            id={id} label={label} color={color} slot={slot}
+            url={trackUrls[id]}
+            muted={!!muted[id]}
+            solo={solo === id}
+            armed={armedSlot === slot}
+            isAnyRecording={isRecording}
+            onMute={() => setMuted(m => ({ ...m, [id]: !m[id] }))}
+            onSolo={() => setSolo(s => s === id ? null : id)}
+            onArm={() => {
+              if (!slot) return;
+              setArmedSlot(a => a === slot ? null : slot);
+            }}
+            onRecordEnd={(blob) => handleRecordEnd(blob, slot!)}
+            hymnId={hymnId}
+          />
+        ))}
+      </div>
+
+      {/* ── Review panel ── */}
+      {pendingBlob && pendingSlot && (
+        <div className="border-t border-gray-700 bg-gray-900 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-white flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TRACKS.find(t=>t.slot===pendingSlot)?.color }} />
+              Revisión — {TRACKS.find(t => t.slot === pendingSlot)?.label}
+            </span>
+            {trimInfo && (
+              <span className="text-[10px] text-gray-400">
+                {fmtTime(trimInfo.start)} → {fmtTime(trimInfo.end)} · Arrastra para recortar
+              </span>
+            )}
+          </div>
+          <div ref={reviewWaveRef} className="w-full rounded-lg overflow-hidden bg-gray-800 px-1 py-1" />
+          <div className="flex gap-2">
             <button
-              onClick={() => { playing ? wsRef.current?.pause() : wsRef.current?.play(); }}
-              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              onClick={upload} disabled={isUploading}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
             >
-              {playing
-                ? <><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg> Pausa</>
-                : <><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg> Reproducir</>
-              }
+              {isUploading ? "Subiendo…" : "Subir"}
             </button>
             <button
-              onClick={applyTrimAndUpload}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white transition-colors"
-              style={{ backgroundColor: color }}
+              onClick={() => reviewWsRef.current?.playPause()}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              Subir
+              Reproducir
             </button>
             <button
-              onClick={startRecording}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              onClick={() => { setArmedSlot(pendingSlot); discardReview(); }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
             >
               Re-grabar
             </button>
-            <button onClick={discard} className="text-xs px-3 py-1.5 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+            <button onClick={discardReview} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-300 transition-colors">
               Descartar
             </button>
           </div>
         </div>
       )}
-
-      {/* ── uploading ── */}
-      {phase === "uploading" && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Procesando y subiendo…
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Studio ─────────────────────────────────────────────────────── */
-function extractYtId(url: string) {
-  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
-
-export default function Studio({
-  hymnId, hymnTitle,
-  referenceUrl, referenceType,
-  audioSopranoUrl, audioContraaltoUrl, audioTenorUrl, audioBajoUrl,
-}: {
-  hymnId: number;
-  hymnTitle: string;
-  referenceUrl: string | null;
-  referenceType: string | null;
-  audioSopranoUrl: string | null;
-  audioContraaltoUrl: string | null;
-  audioTenorUrl: string | null;
-  audioBajoUrl: string | null;
-}) {
-  const [activeRecording, setActiveRecording] = useState<Slot | null>(null);
-  const [ytExpanded, setYtExpanded] = useState(false);
-
-  const existingUrls: Record<Slot, string | null> = {
-    soprano: audioSopranoUrl,
-    contraalto: audioContraaltoUrl,
-    tenor: audioTenorUrl,
-    bajo: audioBajoUrl,
-  };
-
-  const ytId = referenceUrl && referenceType === "youtube" ? extractYtId(referenceUrl) : null;
-
-  return (
-    <div className="px-4 py-6 space-y-6">
-
-      {/* ── Pista de referencia ── */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-6 h-6 rounded-md bg-gray-800 flex items-center justify-center shrink-0">
-            <span className="text-white text-[10px] font-bold">1</span>
-          </div>
-          <span className="text-sm font-semibold text-gray-700">Pista de referencia</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Solo escuchar</span>
-        </div>
-
-        {!referenceUrl && (
-          <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-400 text-center">
-            Sin audio de referencia — agrégalo desde la página del himno
-          </div>
-        )}
-
-        {referenceUrl && referenceType !== "youtube" && (
-          <audio controls className="w-full rounded-xl" src={referenceUrl} />
-        )}
-
-        {ytId && (
-          <div className="space-y-2">
-            <div
-              className="relative rounded-xl overflow-hidden bg-black transition-all duration-300"
-              style={{ aspectRatio: "16/9", width: ytExpanded ? "100%" : "55%" }}
-            >
-              <iframe
-                src={`https://www.youtube.com/embed/${ytId}?rel=0`}
-                title="Referencia"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                loading="lazy"
-                className="absolute inset-0 w-full h-full"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setYtExpanded(!ytExpanded)}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                {ytExpanded ? "Reducir" : "Ampliar"}
-              </button>
-              <p className="text-[10px] text-amber-600">
-                Usa auriculares para que la referencia no entre al micrófono
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Pistas de voz ── */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
-            <span className="text-white text-[10px] font-bold">2</span>
-          </div>
-          <span className="text-sm font-semibold text-gray-700">Cuerdas</span>
-          {activeRecording && (
-            <span className="flex items-center gap-1 text-[10px] text-red-600 font-medium ml-auto">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              Grabando {VOICES.find(v => v.slot === activeRecording)?.label}
-            </span>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          {VOICES.map(({ slot, label, color, bg }) => (
-            <VoiceTrack
-              key={slot}
-              hymnId={hymnId}
-              slot={slot}
-              label={label}
-              color={color}
-              bg={bg}
-              existingUrl={existingUrls[slot]}
-              referenceUrl={referenceUrl}
-              referenceType={referenceType}
-              isBlocked={activeRecording !== null && activeRecording !== slot}
-              onRecordStart={() => setActiveRecording(slot)}
-              onRecordEnd={() => setActiveRecording(null)}
-            />
-          ))}
-        </div>
-      </div>
-
-      <p className="text-[11px] text-gray-400 text-center pb-4">
-        Usa auriculares para grabar con la referencia sonando sin interferencias
-      </p>
     </div>
   );
 }
