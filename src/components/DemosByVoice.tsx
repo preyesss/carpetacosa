@@ -1,4 +1,4 @@
-import DemoRecorder from "./DemoRecorder";
+import ProDemoRecorder from "./ProDemoRecorder";
 
 const VOICES = [
   { key: "soprano",    label: "Soprano",    color: "text-pink-600 bg-pink-50 border-pink-200" },
@@ -62,7 +62,7 @@ export default function DemosByVoice({
               </div>
             )}
 
-            <DemoRecorder hymnId={hymnId} slot={key} />
+            <ProDemoRecorder hymnId={hymnId} slot={key} />
           </div>
         ))}
       </div>

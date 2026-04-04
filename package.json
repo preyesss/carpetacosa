@@ -27,7 +27,8 @@
     "prisma": "^5.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "uploadthing": "^7.7.4"
+    "uploadthing": "^7.7.4",
+    "wavesurfer.js": "^7.12.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
