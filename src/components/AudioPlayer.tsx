@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 function extractYouTubeId(url: string): string | null {
   const m = url.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
@@ -18,6 +20,8 @@ export default function AudioPlayer({
   label?: string;
   hymnTitle?: string;
 }) {
+  const [open, setOpen] = useState(false);
+
   if (!url) {
     const q = hymnTitle ? encodeURIComponent(hymnTitle + " himno") : "";
     return (
@@ -66,18 +70,43 @@ export default function AudioPlayer({
       </span>
 
       {isYouTube && ytId ? (
-        <div
-          className="relative w-full rounded-xl overflow-hidden bg-black"
-          style={{ aspectRatio: "16/9" }}
-        >
-          <iframe
-            src={`https://www.youtube.com/embed/${ytId}?rel=0`}
-            title={label}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            className="absolute inset-0 w-full h-full"
-          />
+        <div className="space-y-2">
+          {/* Barra compacta — siempre visible */}
+          <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+            <div className="w-7 h-7 bg-red-600 rounded-md flex items-center justify-center shrink-0">
+              <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.75 15.5v-7l6.25 3.5-6.25 3.5z"/>
+              </svg>
+            </div>
+            <span className="flex-1 text-sm text-gray-600">YouTube</span>
+            <button
+              onClick={() => setOpen(!open)}
+              className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              {open ? "Ocultar" : "Ver video"}
+            </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ↗
+            </a>
+          </div>
+
+          {/* Video — solo cuando el usuario lo pide */}
+          {open && (
+            <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${ytId}?rel=0&autoplay=1`}
+                title={label}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="absolute inset-0 w-full h-full"
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-1.5">
