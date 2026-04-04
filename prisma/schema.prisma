@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Hymn {
+  id               Int      @id @default(autoincrement())
+  title            String
+  status           String   @default("BACKLOG")
+  source           String   @default("2020")
+
+  // Del archivo 2025
+  hasDemo          Boolean  @default(false)
+  tag              String?
+  hymnaryNumber    Int?
+
+  // Del archivo 2020
+  composer         String?
+  version          String?
+  hymnType         String?
+  soloistNote      String?
+  inConference2021 Boolean  @default(false)
+
+  // Archivos multimedia
+  partituraPdfUrl    String?
+  audioGeneralUrl    String?
+  audioGeneralType   String?
+  audioSopranoUrl    String?
+  audioContraaltoUrl String?
+  audioTenorUrl      String?
+  audioBajoUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
