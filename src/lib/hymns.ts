@@ -10,9 +10,8 @@ export async function getHymns(
   return db.hymn.findMany({
     where: {
       status,
-      ...(query
-        ? { title: { contains: query, mode: "insensitive" } }
-        : {}),
+      // SQLite/Turso: case-insensitive search via LIKE (contains is case-insensitive by default in SQLite)
+      ...(query ? { title: { contains: query } } : {}),
     },
     orderBy: { title: "asc" },
   });
