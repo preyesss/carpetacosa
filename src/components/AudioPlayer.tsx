@@ -70,40 +70,22 @@ export default function AudioPlayer({
       </span>
 
       {isYouTube && ytId ? (
-        <div className="space-y-2">
-          {/* Compact YouTube card */}
-          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
-            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.75 15.5v-7l6.25 3.5-6.25 3.5z"/>
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-red-600 hover:text-red-800 font-medium"
-              >
-                Abrir en YouTube ↗
-              </a>
-            </div>
-            <button
-              onClick={() => setShowVideo(!showVideo)}
-              className="text-xs font-medium text-red-600 hover:text-red-800 transition-colors whitespace-nowrap"
-            >
-              {showVideo ? "Ocultar video" : "Ver video"}
-            </button>
-          </div>
-
-          {/* Collapsible video embed */}
-          {showVideo && (
+        <div className="space-y-1.5">
+          {/* Player: collapsed = solo controles (56px), expandido = video completo */}
+          <div
+            className="relative overflow-hidden rounded-xl bg-black"
+            style={{ height: showVideo ? undefined : "56px" }}
+          >
             <div
-              className="relative w-full rounded-xl overflow-hidden bg-black"
-              style={{ aspectRatio: "16/9" }}
+              className="w-full"
+              style={
+                showVideo
+                  ? { position: "relative", paddingBottom: "56.25%" }
+                  : { position: "absolute", bottom: 0, left: 0, width: "100%", paddingBottom: "56.25%" }
+              }
             >
               <iframe
-                src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
+                src={`https://www.youtube.com/embed/${ytId}?rel=0`}
                 title={label}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
@@ -111,7 +93,20 @@ export default function AudioPlayer({
                 className="absolute inset-0 w-full h-full"
               />
             </div>
-          )}
+          </div>
+
+          <button
+            onClick={() => setShowVideo(!showVideo)}
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {showVideo
+                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              }
+            </svg>
+            {showVideo ? "Ocultar video" : "Ver video"}
+          </button>
         </div>
       ) : (
         <div className="space-y-1.5">
