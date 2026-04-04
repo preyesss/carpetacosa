@@ -11,11 +11,13 @@ type Slot =
   | "tenor"
   | "bajo";
 
-const AUDIO_ACCEPT = "audio/*,.m4a,audio/mp4,audio/x-m4a";
+// Sin restricción de accept en audio — iOS filtra archivos .m4a con audio/* en ciertos casos.
+// La validación de tipo se hace en el servidor.
+const AUDIO_ACCEPT = "";
 
 const SLOTS: { slot: Slot; label: string; accept: string }[] = [
   { slot: "partitura",   label: "Partitura (PDF)", accept: ".pdf,application/pdf" },
-  { slot: "audioGeneral", label: "Audio General",  accept: `${AUDIO_ACCEPT},video/mp4` },
+  { slot: "audioGeneral", label: "Audio General",  accept: AUDIO_ACCEPT },
   { slot: "soprano",     label: "Demo Soprano",    accept: AUDIO_ACCEPT },
   { slot: "contraalto",  label: "Demo Contraalto", accept: AUDIO_ACCEPT },
   { slot: "tenor",       label: "Demo Tenor",      accept: AUDIO_ACCEPT },
@@ -111,7 +113,7 @@ export default function FileUploadSection({
         <input
           ref={(el) => { refs.current["audioGeneral"] = el; }}
           type="file"
-          accept={`${AUDIO_ACCEPT},video/mp4`}
+          accept={AUDIO_ACCEPT || undefined}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
