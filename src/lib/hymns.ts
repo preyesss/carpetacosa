@@ -3,15 +3,35 @@ import type { Hymn } from "@prisma/client";
 
 export type { Hymn };
 
+export type MissingFilter = "partitura" | "audio" | "demos";
+
 export async function getHymns(
   status: "ACTIVE" | "BACKLOG",
-  query?: string
+  query?: string,
+  missing?: MissingFilter[]
 ): Promise<Hymn[]> {
+  const missingFilters: Record<string, unknown>[] = [];
+
+  if (missing?.includes("partitura")) {
+    missingFilters.push({ partituraPdfUrl: null });
+  }
+  if (missing?.includes("audio")) {
+    missingFilters.push({ audioGeneralUrl: null });
+  }
+  if (missing?.includes("demos")) {
+    missingFilters.push({
+      audioSopranoUrl: null,
+      audioContraaltoUrl: null,
+      audioTenorUrl: null,
+      audioBajoUrl: null,
+    });
+  }
+
   return db.hymn.findMany({
     where: {
       status,
-      // SQLite/Turso: case-insensitive search via LIKE (contains is case-insensitive by default in SQLite)
       ...(query ? { title: { contains: query } } : {}),
+      ...(missingFilters.length > 0 ? { AND: missingFilters } : {}),
     },
     orderBy: { title: "asc" },
   });

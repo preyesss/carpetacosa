@@ -1,13 +1,14 @@
-import { getHymns } from "@/lib/hymns";
+import { getHymns, type MissingFilter } from "@/lib/hymns";
 import TabBar from "@/components/TabBar";
 import SearchBar from "@/components/SearchBar";
 import HymnList from "@/components/HymnList";
+import MissingFilterBar from "@/components/MissingFilter";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams: { tab?: string; q?: string };
+  searchParams: { tab?: string; q?: string; missing?: string };
 }
 
 export default async function RepertorioPage({ searchParams }: Props) {
@@ -15,7 +16,9 @@ export default async function RepertorioPage({ searchParams }: Props) {
   const query = searchParams.q ?? "";
   const status = tab === "active" ? "ACTIVE" : "BACKLOG";
 
-  const hymns = await getHymns(status, query || undefined);
+  const missing = (searchParams.missing?.split(",").filter(Boolean) ?? []) as MissingFilter[];
+
+  const hymns = await getHymns(status, query || undefined, missing.length > 0 ? missing : undefined);
 
   return (
     <div className="max-w-2xl mx-auto min-h-screen flex flex-col">
@@ -28,6 +31,9 @@ export default async function RepertorioPage({ searchParams }: Props) {
         <Suspense>
           <SearchBar defaultValue={query} />
         </Suspense>
+        <Suspense>
+          <MissingFilterBar active={missing} />
+        </Suspense>
       </header>
 
       {/* Content */}
@@ -35,19 +41,15 @@ export default async function RepertorioPage({ searchParams }: Props) {
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">
             {hymns.length} {hymns.length === 1 ? "himno" : "himnos"}
-            {query ? ` para "${query}"` : ""}
+            {query ? ` · "${query}"` : ""}
+            {missing.length > 0 ? ` · faltan: ${missing.join(", ")}` : ""}
           </span>
-          {tab === "active" && (
-            <span className="text-xs text-gray-400">
-              {status === "ACTIVE" ? "Repertorio activo" : "Backlog"}
-            </span>
-          )}
         </div>
         <HymnList
           hymns={hymns}
           emptyMessage={
-            query
-              ? `No se encontró "${query}"`
+            query || missing.length > 0
+              ? "No se encontraron himnos con esos filtros"
               : tab === "active"
               ? "No hay himnos en el repertorio activo"
               : "El backlog está vacío"
