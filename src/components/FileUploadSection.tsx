@@ -11,13 +11,15 @@ type Slot =
   | "tenor"
   | "bajo";
 
+const AUDIO_ACCEPT = "audio/*,.m4a,audio/mp4,audio/x-m4a";
+
 const SLOTS: { slot: Slot; label: string; accept: string }[] = [
-  { slot: "partitura", label: "Partitura (PDF)", accept: ".pdf,application/pdf" },
-  { slot: "audioGeneral", label: "Audio General", accept: "audio/*,video/mp4" },
-  { slot: "soprano", label: "Demo Soprano", accept: "audio/*" },
-  { slot: "contraalto", label: "Demo Contraalto", accept: "audio/*" },
-  { slot: "tenor", label: "Demo Tenor", accept: "audio/*" },
-  { slot: "bajo", label: "Demo Bajo", accept: "audio/*" },
+  { slot: "partitura",   label: "Partitura (PDF)", accept: ".pdf,application/pdf" },
+  { slot: "audioGeneral", label: "Audio General",  accept: `${AUDIO_ACCEPT},video/mp4` },
+  { slot: "soprano",     label: "Demo Soprano",    accept: AUDIO_ACCEPT },
+  { slot: "contraalto",  label: "Demo Contraalto", accept: AUDIO_ACCEPT },
+  { slot: "tenor",       label: "Demo Tenor",      accept: AUDIO_ACCEPT },
+  { slot: "bajo",        label: "Demo Bajo",       accept: AUDIO_ACCEPT },
 ];
 
 export default function FileUploadSection({
@@ -109,7 +111,7 @@ export default function FileUploadSection({
         <input
           ref={(el) => { refs.current["audioGeneral"] = el; }}
           type="file"
-          accept="audio/*,video/mp4"
+          accept={`${AUDIO_ACCEPT},video/mp4`}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
