@@ -22,12 +22,22 @@ export default function PartituraViewer({ url }: { url: string | null }) {
     <div className="relative">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Partitura</span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <a
+            href={url}
+            download
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Descargar PDF
+          </a>
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -36,7 +46,7 @@ export default function PartituraViewer({ url }: { url: string | null }) {
           </a>
           <button
             onClick={() => setFullscreen(!fullscreen)}
-            className="text-xs text-blue-600 hover:text-blue-800"
+            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
           >
             {fullscreen ? "Reducir" : "Expandir"}
           </button>
@@ -44,6 +54,7 @@ export default function PartituraViewer({ url }: { url: string | null }) {
       </div>
       <iframe
         src={url}
+        loading="lazy"
         className={`w-full rounded-xl border border-gray-200 bg-white transition-all duration-300 ${
           fullscreen ? "h-screen" : "h-[500px]"
         }`}

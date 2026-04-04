@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 function extractYouTubeId(url: string): string | null {
   const m = url.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
@@ -18,6 +20,8 @@ export default function AudioPlayer({
   label?: string;
   hymnTitle?: string;
 }) {
+  const [showVideo, setShowVideo] = useState(false);
+
   if (!url) {
     const q = hymnTitle ? encodeURIComponent(hymnTitle + " himno") : "";
     return (
@@ -64,24 +68,67 @@ export default function AudioPlayer({
       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-2">
         {label}
       </span>
+
       {isYouTube && ytId ? (
-        <div
-          className="relative w-full rounded-xl overflow-hidden bg-black"
-          style={{ aspectRatio: "16/9" }}
-        >
-          <iframe
-            src={`https://www.youtube.com/embed/${ytId}`}
-            title={label}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            className="absolute inset-0 w-full h-full"
-          />
+        <div className="space-y-2">
+          {/* Compact YouTube card */}
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.75 15.5v-7l6.25 3.5-6.25 3.5z"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-red-600 hover:text-red-800 font-medium"
+              >
+                Abrir en YouTube ↗
+              </a>
+            </div>
+            <button
+              onClick={() => setShowVideo(!showVideo)}
+              className="text-xs font-medium text-red-600 hover:text-red-800 transition-colors whitespace-nowrap"
+            >
+              {showVideo ? "Ocultar video" : "Ver video"}
+            </button>
+          </div>
+
+          {/* Collapsible video embed */}
+          {showVideo && (
+            <div
+              className="relative w-full rounded-xl overflow-hidden bg-black"
+              style={{ aspectRatio: "16/9" }}
+            >
+              <iframe
+                src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
+                title={label}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                loading="lazy"
+                className="absolute inset-0 w-full h-full"
+              />
+            </div>
+          )}
         </div>
       ) : (
-        <audio controls className="w-full rounded-xl" src={url}>
-          Tu navegador no soporta el elemento de audio.
-        </audio>
+        <div className="space-y-1.5">
+          <audio controls className="w-full rounded-xl" src={url}>
+            Tu navegador no soporta el elemento de audio.
+          </audio>
+          <a
+            href={url}
+            download
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Descargar audio
+          </a>
+        </div>
       )}
     </div>
   );
