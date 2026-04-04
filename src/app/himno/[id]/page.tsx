@@ -1,11 +1,21 @@
 import { getHymn } from "@/lib/hymns";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import PartituraViewer from "@/components/PartituraViewer";
-import AudioPlayer from "@/components/AudioPlayer";
-import DemosByVoice from "@/components/DemosByVoice";
+import lazyLoad from "next/dynamic";
 import MoveToActiveButton from "@/components/MoveToActiveButton";
-import FileUploadSection from "@/components/FileUploadSection";
+
+const PartituraViewer = lazyLoad(() => import("@/components/PartituraViewer"), {
+  loading: () => <div className="h-[500px] rounded-xl bg-gray-100 animate-pulse" />,
+});
+const AudioPlayer = lazyLoad(() => import("@/components/AudioPlayer"), {
+  loading: () => <div className="h-12 rounded-xl bg-gray-100 animate-pulse" />,
+});
+const DemosByVoice = lazyLoad(() => import("@/components/DemosByVoice"), {
+  loading: () => <div className="h-40 rounded-xl bg-gray-100 animate-pulse" />,
+});
+const FileUploadSection = lazyLoad(() => import("@/components/FileUploadSection"), {
+  loading: () => <div className="h-24 rounded-xl bg-gray-100 animate-pulse" />,
+});
 
 export const dynamic = "force-dynamic";
 

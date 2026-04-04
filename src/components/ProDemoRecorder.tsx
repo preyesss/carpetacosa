@@ -135,16 +135,17 @@ export default function ProDemoRecorder({
       src.connect(splitter);
       analysers.forEach((a, i) => splitter.connect(a, i));
 
-      const tick = () => {
-        const buf = new Uint8Array(analysers[0].frequencyBinCount);
-        const lvls = analysers.map((a) => {
-          a.getByteFrequencyData(buf);
-          return Math.min(
-            1,
-            Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length) / 64
-          );
-        });
-        setLevels(lvls);
+      const buf = new Uint8Array(analysers[0].frequencyBinCount);
+      let lastUpdate = 0;
+      const tick = (now: number) => {
+        if (now - lastUpdate > 80) { // ~12fps, no 60fps
+          lastUpdate = now;
+          const lvls = analysers.map((a) => {
+            a.getByteFrequencyData(buf);
+            return Math.min(1, Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length) / 64);
+          });
+          setLevels(lvls);
+        }
         animRef.current = requestAnimationFrame(tick);
       };
       animRef.current = requestAnimationFrame(tick);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/plugins/regions";
@@ -45,7 +45,7 @@ const TRACKS: { id: string; label: string; color: string; slot?: Slot }[] = [
 ];
 
 /* ── Track Row ───────────────────────────────────────────────────── */
-function TrackRow({
+const TrackRow = memo(function TrackRow({
   label, color, slot,
   url, ytId,
   muted, solo, armed,
@@ -220,7 +220,7 @@ function TrackRow({
       </div>
     </div>
   );
-}
+});
 
 /* ── Main Studio ─────────────────────────────────────────────────── */
 export default function Studio({
@@ -416,10 +416,10 @@ export default function Studio({
             solo={solo === id}
             armed={armedSlot === slot}
             recordTrigger={recordTrigger}
-            onMute={() => setMuted(m => ({ ...m, [id]: !m[id] }))}
-            onSolo={() => setSolo(s => s === id ? null : id)}
-            onArm={() => slot && setArmedSlot(a => a === slot ? null : slot)}
-            onRecordEnd={(blob) => handleRecordEnd(blob, slot!)}
+            onMute={useCallback(() => setMuted(m => ({ ...m, [id]: !m[id] })), [id])}
+            onSolo={useCallback(() => setSolo(s => s === id ? null : id), [id])}
+            onArm={useCallback(() => slot && setArmedSlot(a => a === slot ? null : slot), [id, slot])}
+            onRecordEnd={useCallback((blob: Blob) => handleRecordEnd(blob, slot!), [slot, handleRecordEnd])}
           />
         ))}
       </div>
