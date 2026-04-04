@@ -68,6 +68,12 @@ function TrackRow({
   const [recSeconds, setRecSeconds] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
+  // Refs para evitar stale closures en effects
+  const armedRef = useRef(armed);
+  armedRef.current = armed;
+  const trackStateRef = useRef(trackState);
+  trackStateRef.current = trackState;
+
   useEffect(() => {
     if (!waveRef.current || !url || trackState === "recording") return;
     wsRef.current?.destroy();
@@ -121,16 +127,17 @@ function TrackRow({
     wsRef.current.isPlaying() ? wsRef.current.pause() : wsRef.current.play();
   };
 
-  /* Trigger recording when parent fires recordTrigger while armed */
+  /* Trigger recording — usa refs para leer valores actuales sin stale closure */
   useEffect(() => {
-    if (armed && recordTrigger > 0 && trackState === "idle") {
+    if (recordTrigger === 0) return;
+    if (armedRef.current && trackStateRef.current === "idle") {
       startRecording();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordTrigger]);
 
   const isYt = !!ytId;
-  const rowHeight = isYt ? 190 : 80;
+  const rowHeight = isYt ? 100 : 80;
 
   return (
     <div className="flex border-b border-gray-800" style={{ minHeight: rowHeight }}>
@@ -166,20 +173,22 @@ function TrackRow({
       {/* Content */}
       <div className="flex-1 relative bg-gray-950 overflow-hidden">
 
-        {/* YouTube en la pista — con progress bar propio */}
+        {/* YouTube — player compacto mostrando solo controls + progreso */}
         {isYt && (
-          <div className="absolute inset-0 flex items-center gap-3 px-3 py-2">
-            <div className="relative rounded-lg overflow-hidden bg-black shrink-0"
-              style={{ height: "calc(100% - 8px)", aspectRatio: "16/9" }}>
-              <iframe
-                src={`https://www.youtube.com/embed/${ytId}?rel=0`}
-                className="absolute inset-0 w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen loading="lazy"
-              />
+          <div className="absolute inset-0 flex flex-col justify-center px-3 gap-2">
+            {/* iframe anclado al fondo: solo se ven los controles (~48px) */}
+            <div className="relative w-full overflow-hidden rounded-lg bg-black" style={{ height: 48 }}>
+              <div className="absolute w-full" style={{ bottom: 0, paddingBottom: "56.25%", left: 0 }}>
+                <iframe
+                  src={`https://www.youtube.com/embed/${ytId}?rel=0`}
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen loading="lazy"
+                />
+              </div>
             </div>
-            <p className="text-[10px] text-amber-400 leading-relaxed max-w-[100px]">
-              Usa auriculares — el video muestra tu posición en la canción
+            <p className="text-[10px] text-amber-400">
+              Presiona ▶ en el player · Usa auriculares al grabar
             </p>
           </div>
         )}
