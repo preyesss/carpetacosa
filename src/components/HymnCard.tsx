@@ -24,7 +24,7 @@ export default function HymnCard({ hymn }: { hymn: Hymn }) {
   return (
     <Link
       href={`/himno/${hymn.id}`}
-      className="flex items-center gap-3 bg-white rounded-xl px-4 py-3.5 border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all duration-150 min-h-[60px]"
+      className="flex items-center gap-3 bg-white rounded-xl px-4 py-3.5 border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all duration-150 min-h-[60px]"
     >
       <div className="flex-1 min-w-0">
         <p className="font-medium text-gray-900 truncate">{hymn.title}</p>
@@ -46,7 +46,7 @@ export default function HymnCard({ hymn }: { hymn: Hymn }) {
             {hymn.hymnType}
           </span>
         )}
-        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </div>

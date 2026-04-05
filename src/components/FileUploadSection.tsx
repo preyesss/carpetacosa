@@ -154,7 +154,7 @@ export default function FileUploadSection({
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">
+      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
         Subir / Cambiar Archivos
       </h3>
 

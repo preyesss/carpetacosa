@@ -24,7 +24,7 @@ export default async function RepertorioPage({ searchParams }: Props) {
     <div className="max-w-2xl mx-auto min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-gray-50 border-b border-gray-100 px-4 pt-4 pb-3 space-y-3">
-        <h1 className="text-xl font-bold text-blue-800">Repertorio del Coro</h1>
+        <h1 className="text-xl font-bold text-gray-900">Repertorio</h1>
         <Suspense>
           <TabBar activeTab={tab} />
         </Suspense>

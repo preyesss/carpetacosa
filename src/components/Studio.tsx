@@ -46,20 +46,23 @@ const TRACKS: { id: string; label: string; color: string; slot?: Slot }[] = [
 
 /* ── Track Row ───────────────────────────────────────────────────── */
 const TrackRow = memo(function TrackRow({
-  label, color, slot,
+  id, label, color, slot,
   url, ytId,
   muted, solo, armed,
   recordTrigger,
-  onMute, onSolo, onArm,
+  setMuted, setSolo, setArmedSlot,
   onRecordEnd,
 }: {
+  id: string;
   label: string; color: string; slot?: Slot;
   url: string | null;
   ytId?: string | null;
   muted: boolean; solo: boolean; armed: boolean;
   recordTrigger: number;
-  onMute: () => void; onSolo: () => void; onArm: () => void;
-  onRecordEnd: (blob: Blob) => void;
+  setMuted: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  setSolo: React.Dispatch<React.SetStateAction<string | null>>;
+  setArmedSlot: React.Dispatch<React.SetStateAction<Slot | null>>;
+  onRecordEnd: (blob: Blob, slot: Slot) => void;
 }) {
   const waveRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
@@ -68,11 +71,19 @@ const TrackRow = memo(function TrackRow({
   const [recSeconds, setRecSeconds] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // Refs para evitar stale closures en effects
+  // Refs to avoid stale closures in effects
   const armedRef = useRef(armed);
   armedRef.current = armed;
   const trackStateRef = useRef(trackState);
   trackStateRef.current = trackState;
+
+  // Stable callbacks — hooks called unconditionally at top level of component
+  const handleMute = useCallback(() => setMuted(m => ({ ...m, [id]: !m[id] })), [id, setMuted]);
+  const handleSolo = useCallback(() => setSolo(s => s === id ? null : id), [id, setSolo]);
+  const handleArm = useCallback(() => slot && setArmedSlot(a => a === slot ? null : slot), [slot, setArmedSlot]);
+  const handleRecordEndWrapped = useCallback((blob: Blob) => {
+    if (slot) onRecordEnd(blob, slot);
+  }, [slot, onRecordEnd]);
 
   useEffect(() => {
     if (!waveRef.current || !url || trackState === "recording") return;
@@ -112,14 +123,14 @@ const TrackRow = memo(function TrackRow({
     wsRef.current = ws;
     recordRef.current = rec;
     rec.on("record-progress", (t) => setRecSeconds(t / 1000));
-    rec.on("record-end", (blob) => { setTrackState("idle"); onRecordEnd(blob); });
+    rec.on("record-end", (blob) => { setTrackState("idle"); handleRecordEndWrapped(blob); });
     await rec.startRecording({
       channelCount: 2, sampleRate: 44100,
       echoCancellation: false, noiseSuppression: false, autoGainControl: false,
     } as MediaTrackConstraints);
     setTrackState("recording");
     setRecSeconds(0);
-  }, [color, onRecordEnd]);
+  }, [color, handleRecordEndWrapped]);
 
   const stopRecording = () => recordRef.current?.stopRecording();
   const togglePlay = () => {
@@ -127,7 +138,7 @@ const TrackRow = memo(function TrackRow({
     wsRef.current.isPlaying() ? wsRef.current.pause() : wsRef.current.play();
   };
 
-  /* Trigger recording — usa refs para leer valores actuales sin stale closure */
+  /* Trigger recording — reads refs to avoid stale closures */
   useEffect(() => {
     if (recordTrigger === 0) return;
     if (armedRef.current && trackStateRef.current === "idle") {
@@ -148,15 +159,15 @@ const TrackRow = memo(function TrackRow({
           <span className="text-xs font-bold text-gray-100 truncate">{label}</span>
         </div>
         <div className="flex items-center gap-1 flex-wrap">
-          <button onClick={onMute}
+          <button onClick={handleMute}
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${muted ? "bg-yellow-400 text-black" : "bg-gray-700 text-gray-400 hover:bg-gray-600"}`}
           >M</button>
-          <button onClick={onSolo}
+          <button onClick={handleSolo}
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${solo ? "bg-green-400 text-black" : "bg-gray-700 text-gray-400 hover:bg-gray-600"}`}
           >S</button>
           {slot && (
             <button
-              onClick={trackState === "recording" ? stopRecording : onArm}
+              onClick={trackState === "recording" ? stopRecording : handleArm}
               className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                 trackState === "recording" ? "bg-red-600 text-white animate-pulse"
                 : armed ? "bg-red-500 text-white"
@@ -173,10 +184,9 @@ const TrackRow = memo(function TrackRow({
       {/* Content */}
       <div className="flex-1 relative bg-gray-950 overflow-hidden">
 
-        {/* YouTube — player compacto mostrando solo controls + progreso */}
+        {/* YouTube — compact player showing only controls */}
         {isYt && (
           <div className="absolute inset-0 flex flex-col justify-center px-3 gap-2">
-            {/* iframe anclado al fondo: solo se ven los controles (~48px) */}
             <div className="relative w-full overflow-hidden rounded-lg bg-black" style={{ height: 48 }}>
               <div className="absolute w-full" style={{ bottom: 0, paddingBottom: "56.25%", left: 0 }}>
                 <iframe
@@ -193,7 +203,7 @@ const TrackRow = memo(function TrackRow({
           </div>
         )}
 
-        {/* Waveform (archivo de audio) — muestra progreso de reproducción */}
+        {/* Waveform */}
         {!isYt && <div ref={waveRef} className="absolute inset-0 px-1 py-2" />}
 
         {/* Empty state */}
@@ -207,7 +217,7 @@ const TrackRow = memo(function TrackRow({
           </div>
         )}
 
-        {/* Play / pause al tocar la pista */}
+        {/* Play / pause overlay */}
         {url && loaded && !isYt && trackState === "idle" && (
           <button onClick={togglePlay}
             className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-black/90 rounded-full p-2 transition-colors"
@@ -249,7 +259,6 @@ export default function Studio({
   const reviewWsRef = useRef<WaveSurfer | null>(null);
   const reviewUrlRef = useRef<string | null>(null);
   const refAudioRef = useRef<HTMLAudioElement | null>(null);
-  const trackWsRefs = useRef<Record<string, HTMLElement>>({});
 
   const ytId = referenceUrl && referenceType === "youtube"
     ? referenceUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1]
@@ -263,22 +272,8 @@ export default function Studio({
     bajo: audioBajoUrl,
   };
 
-  const playAll = () => {
-    Object.values(trackWsRefs.current).forEach((el) => {
-      const ws = (el as HTMLElement & { __ws?: WaveSurfer }).__ws;
-      if (ws && !ws.isPlaying()) ws.play();
-    });
-  };
-  const stopAll = () => {
-    Object.values(trackWsRefs.current).forEach((el) => {
-      const ws = (el as HTMLElement & { __ws?: WaveSurfer }).__ws;
-      ws?.stop();
-    });
-  };
-
   const handlePlayRec = () => {
-    if (!armedSlot) { playAll(); return; }
-    // Play reference audio file simultaneously
+    if (!armedSlot) return;
     if (referenceUrl && referenceType !== "youtube") {
       const audio = new Audio(referenceUrl);
       audio.volume = 0.75;
@@ -286,7 +281,12 @@ export default function Studio({
       audio.play().catch(() => {});
     }
     setIsRecording(true);
-    setRecordTrigger(t => t + 1); // signals the armed TrackRow to start recording
+    setRecordTrigger(t => t + 1);
+  };
+
+  const stopAll = () => {
+    setIsRecording(false);
+    refAudioRef.current?.pause();
   };
 
   const handleRecordEnd = useCallback((blob: Blob, slot: Slot) => {
@@ -330,11 +330,12 @@ export default function Studio({
     try {
       let finalBlob = pendingBlob;
       if (trimInfo) {
-        const decoded = await new AudioContext().decodeAudioData(await pendingBlob.arrayBuffer());
+        const audioCtx = new AudioContext();
+        const decoded = await audioCtx.decodeAudioData(await pendingBlob.arrayBuffer());
         const sr = decoded.sampleRate;
         const s0 = Math.floor(trimInfo.start * sr);
         const s1 = Math.floor(trimInfo.end * sr);
-        const trimmed = new AudioContext().createBuffer(decoded.numberOfChannels, s1 - s0, sr);
+        const trimmed = audioCtx.createBuffer(decoded.numberOfChannels, s1 - s0, sr);
         for (let ch = 0; ch < decoded.numberOfChannels; ch++)
           trimmed.copyToChannel(decoded.getChannelData(ch).subarray(s0, s1), ch);
         finalBlob = encodeWav(trimmed);
@@ -357,31 +358,19 @@ export default function Studio({
 
       {/* ── Transport ── */}
       <div className="flex items-center gap-3 px-4 py-3 bg-gray-900 border-b border-gray-700 flex-wrap">
-        {/* Play / Rec button — prominente */}
         <button
           onClick={handlePlayRec}
+          disabled={!armedSlot}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${
             armedSlot
               ? "bg-red-600 hover:bg-red-700 text-white"
-              : "bg-green-600 hover:bg-green-700 text-white"
+              : "bg-gray-700 text-gray-500 cursor-not-allowed"
           }`}
         >
-          {armedSlot ? (
-            <>
-              <span className="w-3 h-3 rounded-full bg-white animate-pulse" />
-              ▶ REC
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M5 3l14 9-14 9V3z" />
-              </svg>
-              Play
-            </>
-          )}
+          <span className={`w-3 h-3 rounded-full ${armedSlot && isRecording ? "bg-white animate-pulse" : "bg-current opacity-60"}`} />
+          REC
         </button>
 
-        {/* Stop */}
         <button
           onClick={stopAll}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-semibold text-sm transition-colors"
@@ -392,7 +381,7 @@ export default function Studio({
           Stop
         </button>
 
-        <div className="h-5 w-px bg-gray-600" />
+        <div className="h-5 w-px bg-gray-700" />
 
         {armedSlot ? (
           <span className="text-sm text-red-400 font-medium flex items-center gap-2">
@@ -400,7 +389,7 @@ export default function Studio({
             {TRACKS.find(t => t.slot === armedSlot)?.label} lista para grabar
           </span>
         ) : (
-          <span className="text-xs text-gray-500">Presiona ● en una cuerda para armar la grabación</span>
+          <span className="text-xs text-gray-600">Presiona ● en una cuerda para armar la grabación</span>
         )}
       </div>
 
@@ -409,6 +398,7 @@ export default function Studio({
         {TRACKS.map(({ id, label, color, slot }) => (
           <TrackRow
             key={id}
+            id={id}
             label={label} color={color} slot={slot}
             url={trackUrls[id]}
             ytId={id === "referencia" ? ytId : null}
@@ -416,10 +406,10 @@ export default function Studio({
             solo={solo === id}
             armed={armedSlot === slot}
             recordTrigger={recordTrigger}
-            onMute={useCallback(() => setMuted(m => ({ ...m, [id]: !m[id] })), [id])}
-            onSolo={useCallback(() => setSolo(s => s === id ? null : id), [id])}
-            onArm={useCallback(() => slot && setArmedSlot(a => a === slot ? null : slot), [id, slot])}
-            onRecordEnd={useCallback((blob: Blob) => handleRecordEnd(blob, slot!), [slot, handleRecordEnd])}
+            setMuted={setMuted}
+            setSolo={setSolo}
+            setArmedSlot={setArmedSlot}
+            onRecordEnd={handleRecordEnd}
           />
         ))}
       </div>

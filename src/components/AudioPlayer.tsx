@@ -26,7 +26,7 @@ export default function AudioPlayer({
     const q = hymnTitle ? encodeURIComponent(hymnTitle + " himno") : "";
     return (
       <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
           {label}
         </p>
         <p className="text-sm text-gray-400 mb-3">Sin audio todavía.</p>
@@ -65,7 +65,7 @@ export default function AudioPlayer({
 
   return (
     <div>
-      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-2">
+      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
         {label}
       </span>
 
