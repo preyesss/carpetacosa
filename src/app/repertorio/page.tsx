@@ -3,6 +3,7 @@ import TabBar from "@/components/TabBar";
 import SearchBar from "@/components/SearchBar";
 import HymnList from "@/components/HymnList";
 import MissingFilterBar from "@/components/MissingFilter";
+import AddHymnButton from "@/components/AddHymnButton";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,10 @@ export default async function RepertorioPage({ searchParams }: Props) {
     <div className="max-w-2xl mx-auto min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-gray-50 border-b border-gray-100 px-4 pt-4 pb-3 space-y-3">
-        <h1 className="text-xl font-bold text-gray-900">Repertorio</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900">Repertorio</h1>
+          <AddHymnButton defaultStatus={status} />
+        </div>
         <Suspense>
           <TabBar activeTab={tab} />
         </Suspense>

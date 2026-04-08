@@ -48,6 +48,15 @@ export async function activateHymn(id: number): Promise<Hymn> {
   });
 }
 
+export async function createHymn(data: {
+  title: string;
+  composer?: string;
+  hymnType?: string;
+  status: "ACTIVE" | "BACKLOG";
+}): Promise<Hymn> {
+  return db.hymn.create({ data });
+}
+
 export async function updateHymnMedia(
   id: number,
   data: Partial<
