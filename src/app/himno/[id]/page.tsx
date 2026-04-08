@@ -85,16 +85,6 @@ export default async function HimnoPage({ params }: { params: { id: string } }) 
         {hymn.status === "BACKLOG" && (
           <MoveToActiveButton hymnId={hymn.id} />
         )}
-        <Link
-          href={`/grabar/${hymn.id}`}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors text-xs font-medium"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 3a4 4 0 014 4v4a4 4 0 01-8 0V7a4 4 0 014-4z" />
-          </svg>
-          Estudio
-        </Link>
       </header>
 
       {/* Partitura — protagonista */}
